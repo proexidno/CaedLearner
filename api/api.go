@@ -12,6 +12,7 @@ type Word struct {
 	ID          int    `json:"id"`
 	Word        string `json:"word"`
 	Translation string `json:"translation"`
+	Custom      bool   `json:"custom"`
 }
 
 var db *sql.DB
@@ -62,7 +63,7 @@ func createWord(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("INSERT INTO words (word, translation) VALUES (?, ?)", newWord.Word, newWord.Translation)
+	_, err = db.Exec("INSERT INTO words (word, translation, custom) VALUES (?, ?, ?)", newWord.Word, newWord.Translation, 1)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to create word"})
 		return
@@ -72,7 +73,7 @@ func createWord(c *gin.Context) {
 }
 
 func getWords(c *gin.Context) {
-	rows, err := db.Query("SELECT id, word, translation FROM words ORDER BY RANDOM() LIMIT 5")
+	rows, err := db.Query("SELECT id, word, translation, custom FROM words ORDER BY RANDOM() LIMIT 5")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to fetch words"})
 		return
@@ -82,7 +83,7 @@ func getWords(c *gin.Context) {
 	var words []Word
 	for rows.Next() {
 		var word Word
-		if err := rows.Scan(&word.ID, &word.Word, &word.Translation); err != nil {
+		if err := rows.Scan(&word.ID, &word.Word, &word.Translation, &word.Custom); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to scan word"})
 			return
 		}
