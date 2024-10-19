@@ -1,11 +1,11 @@
-package main
+package api
 
 import (
 	"database/sql"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 type Word struct {
@@ -92,7 +92,7 @@ func getWords(c *gin.Context) {
 	c.JSON(http.StatusOK, words)
 }
 
-func main() {
+func test() {
 	initializeDatabase()
 	defer db.Close()
 
