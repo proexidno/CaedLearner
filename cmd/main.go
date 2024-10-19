@@ -6,6 +6,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/mymmrac/telego"
+	"github.com/mymmrac/telego/telegoutil"
 )
 
 func main() {
@@ -18,15 +19,30 @@ func main() {
 
 	botToken := os.Getenv("TELEGRAM_API_TOKEN")
 
-	println(botToken)
-
-	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger())
+	bot, err := telego.NewBot(botToken, telego.WithWarnings())
 
 	if err != nil {
 		fmt.Println("No telegram token")
 		os.Exit(1)
 	}
 
-	println(bot)
+	updates, _ := bot.UpdatesViaLongPolling(nil)
+
+	for update := range updates {
+		if update.Message == nil {
+			continue
+		}
+
+		chatID := telegoutil.ID(update.Message.Chat.ID)
+		bot.CopyMessage(
+			telegoutil.CopyMessage(
+				chatID,
+				chatID,
+				update.Message.MessageID,
+			),
+		)
+	}
+
+	defer bot.StopLongPolling()
 	return
 }
