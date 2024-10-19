@@ -3,11 +3,19 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/mymmrac/telego"
 	"github.com/mymmrac/telego/telegoutil"
+	"github.com/proexidno/CardLearner/api"
 )
+
+type chatState struct {
+	chatID        telego.ChatID
+	word          api.Word
+	whenRequested time.Time
+}
 
 func hadleUpdate(bot *telego.Bot, update telego.Update) {
 	if update.Message == nil {
