@@ -9,6 +9,27 @@ import (
 	"github.com/mymmrac/telego/telegoutil"
 )
 
+func hadleUpdate(bot *telego.Bot, update telego.Update) {
+	if update.Message == nil {
+		return
+	}
+
+	chatID := telegoutil.ID(update.Message.Chat.ID)
+
+	keyboard := telegoutil.Keyboard(
+		telegoutil.KeyboardRow(
+			telegoutil.KeyboardButton("Start"),
+		),
+	)
+
+	message := telegoutil.Message(
+		chatID,
+		"Keyboard message",
+	).WithReplyMarkup(keyboard)
+
+	bot.SendMessage(message)
+}
+
 func main() {
 	err := godotenv.Load()
 
@@ -29,18 +50,7 @@ func main() {
 	updates, _ := bot.UpdatesViaLongPolling(nil)
 
 	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-
-		chatID := telegoutil.ID(update.Message.Chat.ID)
-		bot.CopyMessage(
-			telegoutil.CopyMessage(
-				chatID,
-				chatID,
-				update.Message.MessageID,
-			),
-		)
+		hadleUpdate(bot, update)
 	}
 
 	defer bot.StopLongPolling()
