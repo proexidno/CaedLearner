@@ -12,10 +12,11 @@ import (
 )
 
 type chatState struct {
-	chatID        telego.ChatID
 	word          api.Word
 	whenRequested time.Time
 }
+
+var chatStates map[string]chatState = make(map[string]chatState)
 
 func hadleUpdate(bot *telego.Bot, update telego.Update) {
 	if update.Message == nil {
