@@ -3,20 +3,88 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
+	"strings"
+
+	// "sync"
+	// "time"
 
 	"github.com/joho/godotenv"
 	"github.com/mymmrac/telego"
+	"github.com/mymmrac/telego/telegohandler"
 	"github.com/mymmrac/telego/telegoutil"
-	"github.com/proexidno/CardLearner/api"
+	// "github.com/proexidno/CardLearner/api"
 )
 
-type chatState struct {
-	word          api.Word
-	whenRequested time.Time
+// type chatState struct {
+// 	word          api.Word
+// 	whenRequested time.Time
+// }
+
+// var chatStates map[string]chatState = make(map[string]chatState)
+// var chatStateMutex = sync.Mutex{}
+
+func callMenu(bot *telego.Bot, update telego.Update) {
+	buttonRevise := telegoutil.InlineKeyboardButton("Повторять слова")
+	buttonRevise.CallbackData = "revise"
+
+	buttonLearn := telegoutil.InlineKeyboardButton("Учить новые слова")
+	buttonLearn.CallbackData = "learn"
+
+	keyboard := telegoutil.InlineKeyboard(
+		telegoutil.InlineKeyboardRow(
+			buttonRevise,
+			buttonLearn,
+		),
+	)
+	message := telegoutil.Message(
+		telegoutil.ID(update.Message.Chat.ID),
+		"This is menu",
+	).WithReplyMarkup(keyboard)
+	_, err := bot.SendMessage(message)
+	if err != nil {
+		println(err.Error())
+	}
 }
 
-var chatStates map[string]chatState = make(map[string]chatState)
+func callRevise(bot *telego.Bot, update telego.Update) {
+	var chatID telego.ChatID
+	if update.Message != nil {
+		chatID = telegoutil.ID(update.Message.Chat.ID)
+	} else {
+		chatID = telegoutil.ID(update.CallbackQuery.From.ID)
+	}
+
+	keyboard := telegoutil.Keyboard(
+		telegoutil.KeyboardRow(
+			telegoutil.KeyboardButton("Запомнил(а)"),
+			telegoutil.KeyboardButton("Повторить ещё раз"),
+		),
+	)
+
+	message := telegoutil.Message(
+		chatID,
+		"This is revise",
+	).WithReplyMarkup(keyboard)
+	bot.SendMessage(message)
+}
+
+func callLearn(bot *telego.Bot, update telego.Update) {
+	var chatID telego.ChatID
+	if update.Message != nil {
+		chatID = telegoutil.ID(update.Message.Chat.ID)
+	} else {
+		chatID = telegoutil.ID(update.CallbackQuery.From.ID)
+	}
+	message := telegoutil.Message(
+		chatID,
+		"This is learn",
+	)
+	bot.SendMessage(message)
+}
+
+func handleQuery(bot *telego.Bot, update telego.Update) {
+	fmt.Println("query:", update.CallbackQuery.Data)
+}
 
 func hadleUpdate(bot *telego.Bot, update telego.Update) {
 	if update.Message == nil {
@@ -25,18 +93,18 @@ func hadleUpdate(bot *telego.Bot, update telego.Update) {
 
 	chatID := telegoutil.ID(update.Message.Chat.ID)
 
-	keyboard := telegoutil.Keyboard(
-		telegoutil.KeyboardRow(
-			telegoutil.KeyboardButton("Start"),
+	raw := update.Message.Text
+	concated := strings.TrimSpace(raw)
+	userMessage := strings.ToLower(concated)
+	println(userMessage)
+
+	bot.CopyMessage(
+		telegoutil.CopyMessage(
+			chatID,
+			chatID,
+			update.Message.MessageID,
 		),
 	)
-
-	message := telegoutil.Message(
-		chatID,
-		"Keyboard message",
-	).WithReplyMarkup(keyboard)
-
-	bot.SendMessage(message)
 }
 
 func main() {
@@ -57,11 +125,20 @@ func main() {
 	}
 
 	updates, _ := bot.UpdatesViaLongPolling(nil)
-
-	for update := range updates {
-		hadleUpdate(bot, update)
-	}
+	botHandler, _ := telegohandler.NewBotHandler(bot, updates)
 
 	defer bot.StopLongPolling()
+	defer botHandler.Stop()
+
+	botHandler.Handle(callMenu, telegohandler.CommandEqual("start"))
+	botHandler.Handle(callRevise, telegohandler.CallbackDataEqual("revise"))
+	botHandler.Handle(callLearn, telegohandler.CallbackDataEqual("learn"))
+	botHandler.Handle(callRevise, telegohandler.CommandEqual("revise"))
+	botHandler.Handle(callLearn, telegohandler.CommandEqual("learn"))
+	botHandler.Handle(hadleUpdate, telegohandler.AnyMessage())
+
+	println("Up and running")
+	botHandler.Start()
+
 	return
 }
