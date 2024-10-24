@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	// "sync"
-	// "time"
+	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/mymmrac/telego"
@@ -15,13 +15,20 @@ import (
 	// "github.com/proexidno/CardLearner/api"
 )
 
-// type chatState struct {
-// 	word          api.Word
-// 	whenRequested time.Time
-// }
+// remove when api is ready
+type Word struct {
+	ID          int    `json:"id"`
+	Word        string `json:"word"`
+	Translation string `json:"translation"`
+}
 
-// var chatStates map[string]chatState = make(map[string]chatState)
-// var chatStateMutex = sync.Mutex{}
+type chatState struct {
+	word          Word
+	whenRequested time.Time
+}
+
+var chatStates map[int64]chatState = make(map[int64]chatState)
+var chatStateMutex = sync.RWMutex{}
 
 func callMenu(bot *telego.Bot, update telego.Update) {
 	buttonRevise := telegoutil.InlineKeyboardButton("Повторять слова")
@@ -46,13 +53,44 @@ func callMenu(bot *telego.Bot, update telego.Update) {
 	}
 }
 
+func newWordToState(chatID int64) Word {
+	chatStateMutex.Lock()
+	// random word from db
+	var stateWord Word
+	var stateState chatState = chatState{word: stateWord, whenRequested: time.Now()}
+	chatStates[chatID] = stateState
+	chatStateMutex.Unlock()
+	return stateWord
+}
+
 func callRevise(bot *telego.Bot, update telego.Update) {
-	var chatID telego.ChatID
+	var chatID int64
 	if update.Message != nil {
-		chatID = telegoutil.ID(update.Message.Chat.ID)
+		chatID = update.Message.Chat.ID
 	} else {
-		chatID = telegoutil.ID(update.CallbackQuery.From.ID)
+		chatID = update.CallbackQuery.From.ID
 	}
+
+	chatStateMutex.RLock()
+	state, ok := chatStates[chatID]
+	chatStateMutex.RUnlock()
+
+	var toShow Word
+	if !ok {
+		toShow = newWordToState(chatID)
+	} else {
+		if time.Since(state.whenRequested).Minutes() >= 30 {
+			toShow = newWordToState(chatID)
+		} else {
+			toShow = state.word
+			state.whenRequested = time.Now()
+			chatStateMutex.Lock()
+			chatStates[chatID] = state
+			chatStateMutex.Unlock()
+		}
+	}
+
+	println(toShow.Word)
 
 	keyboard := telegoutil.Keyboard(
 		telegoutil.KeyboardRow(
@@ -62,7 +100,7 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 	)
 
 	message := telegoutil.Message(
-		chatID,
+		telegoutil.ID(chatID),
 		"This is revise",
 	).WithReplyMarkup(keyboard)
 	bot.SendMessage(message)
