@@ -161,7 +161,7 @@ func callLearn(bot *telego.Bot, update telego.Update) {
 	bot.SendMessage(message)
 }
 
-func hadleUpdate(bot *telego.Bot, update telego.Update) {
+func handleUpdate(bot *telego.Bot, update telego.Update) {
 	if update.Message == nil {
 		return
 	}
@@ -285,7 +285,7 @@ func main() {
 	botHandler.Handle(callLearn, telegohandler.CallbackDataEqual("learn"))
 	botHandler.Handle(callRevise, telegohandler.CommandEqual("revise"))
 	botHandler.Handle(callLearn, telegohandler.CommandEqual("learn"))
-	botHandler.Handle(hadleUpdate, telegohandler.AnyMessage())
+	botHandler.Handle(handleUpdate, telegohandler.AnyMessageWithText())
 
 	println("Up and running")
 	botHandler.Start()
