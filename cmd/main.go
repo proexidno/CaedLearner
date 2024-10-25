@@ -25,6 +25,8 @@ type Word struct {
 type chatState struct {
 	word          Word
 	whenRequested time.Time
+	isLearn       bool
+	tries         uint8
 }
 
 var chatStates map[int64]chatState = make(map[int64]chatState)
@@ -53,11 +55,21 @@ func callMenu(bot *telego.Bot, update telego.Update) {
 	}
 }
 
-func newWordToState(chatID int64) Word {
+func newReviseWordToState(chatID int64) Word {
 	chatStateMutex.Lock()
 	// random word from db
-	var stateWord Word
-	var stateState chatState = chatState{word: stateWord, whenRequested: time.Now()}
+	var stateWord Word = Word{Word: "kekl", Translation: "кекл", ID: 1}
+	var stateState chatState = chatState{word: stateWord, whenRequested: time.Now(), isLearn: false}
+	chatStates[chatID] = stateState
+	chatStateMutex.Unlock()
+	return stateWord
+}
+
+func newLearnWordToState(chatID int64) Word {
+	chatStateMutex.Lock()
+	// random word from db
+	var stateWord Word = Word{Word: "aboba", Translation: "абоба", ID: 1}
+	var stateState chatState = chatState{word: stateWord, whenRequested: time.Now(), isLearn: true}
 	chatStates[chatID] = stateState
 	chatStateMutex.Unlock()
 	return stateWord
@@ -77,10 +89,10 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 
 	var toShow Word
 	if !ok {
-		toShow = newWordToState(chatID)
+		toShow = newReviseWordToState(chatID)
 	} else {
-		if time.Since(state.whenRequested).Minutes() >= 30 {
-			toShow = newWordToState(chatID)
+		if time.Since(state.whenRequested).Minutes() >= 30 || state.isLearn {
+			toShow = newReviseWordToState(chatID)
 		} else {
 			toShow = state.word
 			state.whenRequested = time.Now()
@@ -90,7 +102,7 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 		}
 	}
 
-	println(toShow.Word)
+	fmt.Println(toShow.Word)
 
 	keyboard := telegoutil.Keyboard(
 		telegoutil.KeyboardRow(
@@ -101,27 +113,52 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 
 	message := telegoutil.Message(
 		telegoutil.ID(chatID),
-		"This is revise",
+		fmt.Sprintf("%v", toShow.Translation),
 	).WithReplyMarkup(keyboard)
 	bot.SendMessage(message)
 }
 
 func callLearn(bot *telego.Bot, update telego.Update) {
-	var chatID telego.ChatID
+	var chatID int64
 	if update.Message != nil {
-		chatID = telegoutil.ID(update.Message.Chat.ID)
+		chatID = update.Message.Chat.ID
 	} else {
-		chatID = telegoutil.ID(update.CallbackQuery.From.ID)
+		chatID = update.CallbackQuery.From.ID
 	}
-	message := telegoutil.Message(
-		chatID,
-		"This is learn",
-	)
-	bot.SendMessage(message)
-}
 
-func handleQuery(bot *telego.Bot, update telego.Update) {
-	fmt.Println("query:", update.CallbackQuery.Data)
+	chatStateMutex.RLock()
+	state, ok := chatStates[chatID]
+	chatStateMutex.RUnlock()
+
+	var toShow Word
+	if !ok {
+		toShow = newLearnWordToState(chatID)
+	} else {
+		if time.Since(state.whenRequested).Minutes() >= 30 || !state.isLearn {
+			toShow = newReviseWordToState(chatID)
+		} else {
+			toShow = state.word
+			state.whenRequested = time.Now()
+			chatStateMutex.Lock()
+			chatStates[chatID] = state
+			chatStateMutex.Unlock()
+		}
+	}
+
+	// fmt.Println(toShow.Translation)
+
+	keyboard := telegoutil.Keyboard(
+		telegoutil.KeyboardRow(
+			telegoutil.KeyboardButton("Уже знал(а)"),
+			telegoutil.KeyboardButton("Начать учить"),
+		),
+	)
+
+	message := telegoutil.Message(
+		telegoutil.ID(chatID),
+		fmt.Sprintf("%v", toShow.Translation),
+	).WithReplyMarkup(keyboard)
+	bot.SendMessage(message)
 }
 
 func hadleUpdate(bot *telego.Bot, update telego.Update) {
@@ -129,20 +166,95 @@ func hadleUpdate(bot *telego.Bot, update telego.Update) {
 		return
 	}
 
-	chatID := telegoutil.ID(update.Message.Chat.ID)
+	chatID := update.Message.Chat.ID
 
 	raw := update.Message.Text
 	concated := strings.TrimSpace(raw)
 	userMessage := strings.ToLower(concated)
-	println(userMessage)
 
-	bot.CopyMessage(
-		telegoutil.CopyMessage(
-			chatID,
-			chatID,
-			update.Message.MessageID,
-		),
-	)
+	chatStateMutex.RLock()
+	state, ok := chatStates[chatID]
+	chatStateMutex.RUnlock()
+
+	if userMessage == "запомнил" || userMessage == "запомнила" || userMessage == "запомнил(а)" {
+		chatStateMutex.Lock()
+		currState := chatStates[chatID]
+		delete(chatStates, chatID)
+		chatStateMutex.Unlock()
+		// call db next level for currState
+		fmt.Println(currState.word)
+		callRevise(bot, update)
+		return
+	} else if userMessage == "уже знал" || userMessage == "уже знала" || userMessage == "уже знал(а)" {
+		chatStateMutex.Lock()
+		currState := chatStates[chatID]
+		delete(chatStates, chatID)
+		chatStateMutex.Unlock()
+		// call db max level for currState
+		fmt.Println(currState.word)
+		callLearn(bot, update)
+		return
+	} else if userMessage == "начать учить" {
+		chatStateMutex.Lock()
+		currState := chatStates[chatID]
+		delete(chatStates, chatID)
+		chatStateMutex.Unlock()
+		// call db start revising new word
+		fmt.Println(currState.word)
+		callLearn(bot, update)
+		return
+	} else if userMessage == "повторить ещё раз" || userMessage == "повторить еще раз" {
+		chatStateMutex.Lock()
+		delete(chatStates, chatID)
+		chatStateMutex.Unlock()
+		callRevise(bot, update)
+		return
+	}
+
+	if !ok {
+		callMenu(bot, update)
+		return
+	}
+	var message *telego.SendMessageParams
+
+	fmt.Println(userMessage)
+	if userMessage != state.word.Word && state.tries < 2 {
+		state.tries++
+		chatStateMutex.Lock()
+		chatStates[chatID] = state
+		chatStateMutex.Unlock()
+
+		// wrong tries: x/3
+		message = telegoutil.Message(
+			telegoutil.ID(chatID),
+
+			fmt.Sprintf("%v\nНеправильно, попыток: %v/3", state.word.Word, state.tries),
+		)
+
+	} else {
+		var keyboard *telego.ReplyKeyboardMarkup
+		if state.isLearn {
+			keyboard = telegoutil.Keyboard(
+				telegoutil.KeyboardRow(
+					telegoutil.KeyboardButton("Уже знал(а)"),
+					telegoutil.KeyboardButton("Начать учить"),
+				),
+			)
+		} else {
+			keyboard = telegoutil.Keyboard(
+				telegoutil.KeyboardRow(
+					telegoutil.KeyboardButton("Запомнил(а)"),
+					telegoutil.KeyboardButton("Повторить ещё раз"),
+				),
+			)
+		}
+		message = telegoutil.Message(
+			telegoutil.ID(chatID),
+			fmt.Sprintf("%v\n%v", state.word.Word, state.word.Translation),
+		).WithReplyMarkup(keyboard)
+	}
+
+	bot.SendMessage(message)
 }
 
 func main() {
