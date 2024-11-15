@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"database/sql"
@@ -65,7 +65,5 @@ func setWord(word Word, isLearned bool, chatID int64) {
 }
 
 func test() {
-	initDatabase()
-	defer db.Close()
 
 }

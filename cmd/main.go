@@ -12,7 +12,6 @@ import (
 	"github.com/mymmrac/telego"
 	"github.com/mymmrac/telego/telegohandler"
 	"github.com/mymmrac/telego/telegoutil"
-	// "github.com/proexidno/CardLearner/api"
 )
 
 // remove when api is ready
