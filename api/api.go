@@ -2,10 +2,6 @@ package api
 
 import (
 	"database/sql"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
-	"github.com/mattn/go-sqlite3"
 )
 
 type Word struct {
@@ -17,7 +13,10 @@ type Word struct {
 
 var db *sql.DB
 
-func initializeDatabase() {
+
+// Which should initialize tables and fill them with words
+// error should equal nil unless there is an error when accessing database
+func initDatabase() {
 	var err error
 	db, err = sql.Open("sqlite3", "./data/database.db")
 	if err != nil {
@@ -31,11 +30,12 @@ func initializeDatabase() {
 		translation TEXT NOT NULL,
 		custom BOOLEAN
 	);
-	CREATE TABLE IF NOT EXISTS userwords (
+	CREATE TABLE userwords(  
 		id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER,
 		word_id INTEGER,
-		next_revixe TIME,
+		next_revise TIME,
+		level INTEGER,
 		custom BOOLEAN
 	);
 	`
@@ -45,62 +45,29 @@ func initializeDatabase() {
 	}
 }
 
-func createWord(c *gin.Context) {
-	var newWord Word
-	if err := c.ShouldBindJSON(&newWord); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+// Func which return a random word from a list of global words that this user have never seen
+// error should equal nil unless there is an error when accessing database
+getLearnWord(chatID int64) Word, error {
 
-	var existingWord Word
-	err := db.QueryRow("SELECT id, word, translation FROM words WHERE word = ?", newWord.Word).Scan(&existingWord.ID, &existingWord.Word, &existingWord.Translation)
-
-	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Word already exists"})
-		return
-	} else if err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to check word uniqueness"})
-		return
-	}
-
-	_, err = db.Exec("INSERT INTO words (word, translation, custom) VALUES (?, ?, ?)", newWord.Word, newWord.Translation, 1)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to create word"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, newWord)
 }
 
-func getWords(c *gin.Context) {
-	rows, err := db.Query("SELECT id, word, translation, custom FROM words ORDER BY RANDOM() LIMIT 5")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to fetch words"})
-		return
-	}
-	defer rows.Close()
+// Which should return a random word from a list of words that this user have seen and should revise (determined by time)
+// OR nil when there are no words that user can revise
+// error should equal nil unless there is an error when accessing database
+getReviseWord(chatID int64) Word, error{
 
-	var words []Word
-	for rows.Next() {
-		var word Word
-		if err := rows.Scan(&word.ID, &word.Word, &word.Translation, &word.Custom); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to scan word"})
-			return
-		}
-		words = append(words, word)
-	}
-
-	c.JSON(http.StatusOK, words)
 }
+
+// Sets word for this user to the next level or revision if isLearned is false
+// Sets word for this user to be learned (max level of revision) isLearned is true
+// error should equal nil unless there is an error when accessing database
+setWord(word Word, isLearned bool, chatID int64) error{
+
+}
+
 
 func test() {
-	initializeDatabase()
+	initDatabase()
 	defer db.Close()
 
-	r := gin.Default()
-
-	r.GET("/words", getWords)
-	r.POST("/words", createWord)
-
-	r.Run()
 }
