@@ -13,7 +13,6 @@ type Word struct {
 
 var db *sql.DB
 
-
 // Which should initialize tables and fill them with words
 // error should equal nil unless there is an error when accessing database
 func initDatabase() {
@@ -47,24 +46,23 @@ func initDatabase() {
 
 // Func which return a random word from a list of global words that this user have never seen
 // error should equal nil unless there is an error when accessing database
-getLearnWord(chatID int64) Word, error {
+func getLearnWord(chatID int64) {
 
 }
 
 // Which should return a random word from a list of words that this user have seen and should revise (determined by time)
 // OR nil when there are no words that user can revise
 // error should equal nil unless there is an error when accessing database
-getReviseWord(chatID int64) Word, error{
+func getReviseWord(chatID int64) {
 
 }
 
 // Sets word for this user to the next level or revision if isLearned is false
 // Sets word for this user to be learned (max level of revision) isLearned is true
 // error should equal nil unless there is an error when accessing database
-setWord(word Word, isLearned bool, chatID int64) error{
+func setWord(word Word, isLearned bool, chatID int64) {
 
 }
-
 
 func test() {
 	initDatabase()
