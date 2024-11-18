@@ -15,11 +15,11 @@ import (
 )
 
 // remove when api is ready
-type Word struct {
-	ID          int    `json:"id"`
-	Word        string `json:"word"`
-	Translation string `json:"translation"`
-}
+// type Word struct {
+// 	ID          int
+// 	Word        string
+// 	Translation string
+// }
 
 type chatState struct {
 	word          Word
@@ -257,6 +257,11 @@ func handleUpdate(bot *telego.Bot, update telego.Update) {
 }
 
 func main() {
+	const debug bool = false
+	if debug {
+		test()
+		os.Exit(0)
+	}
 	err := godotenv.Load()
 
 	if err != nil {
