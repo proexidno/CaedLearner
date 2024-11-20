@@ -64,6 +64,14 @@ func initDatabase() error {
 	return err
 }
 
+func openDataBase() {
+	var err error
+	db, err = sql.Open("sqlite3", "./data/database.db")
+	if err != nil {
+		log.Fatalf("Error when opening db:\n%v\n", err.Error())
+	}
+}
+
 // Load words from a CSV file into the database
 func loadWordsFromCSV(filename string) error {
 	file, err := os.Open(filename)
@@ -152,7 +160,6 @@ func setWord(word Word, isLearned bool, chatID int64) error {
 }
 
 func test() {
-	println("start")
 	err := initDatabase()
 	if err != nil {
 		log.Fatalln("error Initing db")
