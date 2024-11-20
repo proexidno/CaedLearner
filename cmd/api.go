@@ -12,10 +12,10 @@ import (
 )
 
 type Word struct {
-	ID          int    `json:"id"`
-	Word        string `json:"word"`
-	Translation string `json:"translation"`
-	Custom      bool   `json:"custom"`
+	ID          int
+	Word        string
+	Translation string
+	Custom      bool
 }
 
 var db *sql.DB
@@ -25,7 +25,7 @@ func initDatabase() error {
 	var err error
 	db, err = sql.Open("sqlite3", "./data/database.db")
 	if err != nil {
-		println(err.Error())
+		log.Println(err.Error())
 		return err
 	}
 
