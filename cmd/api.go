@@ -48,7 +48,6 @@ func initDatabase() {
 		panic(err)
 	}
 
-	// Load words from CSV files
 	loadWordsFromCSV("data/words1.csv")
 	loadWordsFromCSV("data/words2.csv")
 	loadWordsFromCSV("data/words3.csv")
@@ -92,7 +91,7 @@ func getLearnWord(chatID int64) (*Word, error) {
 
 	if err := row.Scan(&word.ID, &word.Word, &word.Translation, &word.Custom); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // No word available
+			return nil, nil
 		}
 		return nil, err
 	}
@@ -128,7 +127,7 @@ func setWord(word Word, isLearned bool, chatID int64) error {
 			WHERE user_id = ? AND word_id = ?`, chatID, word.ID)
 		return err
 	} else {
-		nextRevise := now.Add(24 * time.Hour) // Set next revise for 24 hours later
+		nextRevise := now.Add(24 * time.Hour)
 		_, err := db.Exec(`
 			INSERT OR REPLACE INTO userwords (user_id, word_id, next_revise, level, custom) 
 			VALUES (?, ?, ?, 0, ?)`, chatID, word.ID, nextRevise, word.Custom)
@@ -137,6 +136,5 @@ func setWord(word Word, isLearned bool, chatID int64) error {
 }
 
 func test() {
-	// You can implement some testing logic here if needed
 	initDatabase()
 }
