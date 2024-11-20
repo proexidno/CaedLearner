@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -46,32 +47,43 @@ func callMenu(bot *telego.Bot, update telego.Update) {
 	)
 	message := telegoutil.Message(
 		telegoutil.ID(update.Message.Chat.ID),
-		"This is menu",
+		`Чтобы вызвать это меню напишите /start или /menu
+Для начала повторения напишите /revise или нажмите на кнопку ниже
+Для заучивания новых слов напишите /learn или нажмите кнопку ниже
+
+Повторения карточек в этом боте основано на методе повторяющегося обучения
+Если подтвердить обучение карточки будут появляться в повторении через увеличивающийся промежутки времени`,
 	).WithReplyMarkup(keyboard)
-	_, err := bot.SendMessage(message)
+	bot.SendMessage(message)
+}
+
+func newReviseWordToState(chatID int64) (*Word, error) {
+	chatStateMutex.Lock()
+	defer chatStateMutex.Unlock()
+	// random word from db
+	stateWord, err := getReviseWord(chatID)
 	if err != nil {
-		println(err.Error())
+		return nil, err
 	}
+	if stateWord == nil {
+		return nil, nil
+	}
+	var stateState chatState = chatState{word: *stateWord, whenRequested: time.Now(), isLearn: false}
+	chatStates[chatID] = stateState
+	return stateWord, nil
 }
 
-func newReviseWordToState(chatID int64) Word {
+func newLearnWordToState(chatID int64) (*Word, error) {
 	chatStateMutex.Lock()
+	defer chatStateMutex.Unlock()
 	// random word from db
-	var stateWord Word = Word{Word: "kekl", Translation: "кекл", ID: 1}
-	var stateState chatState = chatState{word: stateWord, whenRequested: time.Now(), isLearn: false}
+	stateWord, err := getLearnWord(chatID)
+	if err != nil {
+		return nil, err
+	}
+	var stateState chatState = chatState{word: *stateWord, whenRequested: time.Now(), isLearn: true}
 	chatStates[chatID] = stateState
-	chatStateMutex.Unlock()
-	return stateWord
-}
-
-func newLearnWordToState(chatID int64) Word {
-	chatStateMutex.Lock()
-	// random word from db
-	var stateWord Word = Word{Word: "aboba", Translation: "абоба", ID: 1}
-	var stateState chatState = chatState{word: stateWord, whenRequested: time.Now(), isLearn: true}
-	chatStates[chatID] = stateState
-	chatStateMutex.Unlock()
-	return stateWord
+	return stateWord, nil
 }
 
 func callRevise(bot *telego.Bot, update telego.Update) {
@@ -86,14 +98,62 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 	state, ok := chatStates[chatID]
 	chatStateMutex.RUnlock()
 
-	var toShow Word
+	var toShow *Word
+	var err error
 	if !ok {
-		toShow = newReviseWordToState(chatID)
+		toShow, err = newReviseWordToState(chatID)
+		if err != nil {
+			log.Printf("error when newReviseWord:\n%v\n", err.Error())
+			return
+		}
+		if toShow == nil {
+			toShow, err = newLearnWordToState(chatID)
+			if err != nil {
+				log.Printf("error when newLearnWord:\n%v\n", err.Error())
+				return
+			}
+			keyboard := telegoutil.Keyboard(
+				telegoutil.KeyboardRow(
+					telegoutil.KeyboardButton("Запомнил(а)"),
+					telegoutil.KeyboardButton("Повторить ещё раз"),
+				),
+			)
+
+			message := telegoutil.Message(
+				telegoutil.ID(chatID),
+				fmt.Sprintf("Нет доступных слов для повторения. Вот новое слово:\n%v", (*toShow).Translation),
+			).WithReplyMarkup(keyboard)
+			bot.SendMessage(message)
+			return
+		}
 	} else {
 		if time.Since(state.whenRequested).Minutes() >= 30 || state.isLearn {
-			toShow = newReviseWordToState(chatID)
+			toShow, err = newReviseWordToState(chatID)
+			if err != nil {
+				log.Printf("error when newReviseWord:\n%v\n", err.Error())
+				return
+			}
+			if toShow == nil {
+				toShow, err = newLearnWordToState(chatID)
+				if err != nil {
+					log.Printf("error when newLearnWord:\n%v\n", err.Error())
+					return
+				}
+				keyboard := telegoutil.Keyboard(
+					telegoutil.KeyboardRow(
+						telegoutil.KeyboardButton("Запомнил(а)"),
+						telegoutil.KeyboardButton("Повторить ещё раз"),
+					),
+				)
+
+				message := telegoutil.Message(
+					telegoutil.ID(chatID),
+					fmt.Sprintf("Нет доступных слов для повторения. Вот новое слово:\n%v", (*toShow).Translation),
+				).WithReplyMarkup(keyboard)
+				bot.SendMessage(message)
+			}
 		} else {
-			toShow = state.word
+			toShow = &state.word
 			state.whenRequested = time.Now()
 			chatStateMutex.Lock()
 			chatStates[chatID] = state
@@ -101,7 +161,14 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 		}
 	}
 
-	fmt.Println(toShow.Word)
+	if toShow == nil {
+		message := telegoutil.Message(
+			telegoutil.ID(chatID),
+			"Что-то пошло не так",
+		)
+		bot.SendMessage(message)
+		return
+	}
 
 	keyboard := telegoutil.Keyboard(
 		telegoutil.KeyboardRow(
@@ -112,7 +179,7 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 
 	message := telegoutil.Message(
 		telegoutil.ID(chatID),
-		fmt.Sprintf("%v", toShow.Translation),
+		fmt.Sprintf("%v", (*toShow).Translation),
 	).WithReplyMarkup(keyboard)
 	bot.SendMessage(message)
 }
@@ -129,14 +196,37 @@ func callLearn(bot *telego.Bot, update telego.Update) {
 	state, ok := chatStates[chatID]
 	chatStateMutex.RUnlock()
 
-	var toShow Word
+	var toShow *Word
+	var err error
 	if !ok {
-		toShow = newLearnWordToState(chatID)
+		toShow, err = newLearnWordToState(chatID)
+		if err != nil {
+			log.Printf("error when newReviseWord:\n%v\n", err.Error())
+			return
+		}
+		if toShow == nil {
+			toShow, err = newLearnWordToState(chatID)
+			if err != nil {
+				log.Printf("error when newLearnWord:\n%v\n", err.Error())
+				return
+			}
+		}
 	} else {
 		if time.Since(state.whenRequested).Minutes() >= 30 || !state.isLearn {
-			toShow = newReviseWordToState(chatID)
+			toShow, err = newReviseWordToState(chatID)
+			if err != nil {
+				log.Printf("error when newLearnWord:\n%v\n", err.Error())
+				return
+			}
+			if toShow == nil {
+				toShow, err = newLearnWordToState(chatID)
+				if err != nil {
+					log.Printf("error when newLearnWord:\n%v\n", err.Error())
+					return
+				}
+			}
 		} else {
-			toShow = state.word
+			toShow = &state.word
 			state.whenRequested = time.Now()
 			chatStateMutex.Lock()
 			chatStates[chatID] = state
@@ -144,7 +234,14 @@ func callLearn(bot *telego.Bot, update telego.Update) {
 		}
 	}
 
-	// fmt.Println(toShow.Translation)
+	if toShow == nil {
+		message := telegoutil.Message(
+			telegoutil.ID(chatID),
+			"Что-то пошло не так",
+		)
+		bot.SendMessage(message)
+		return
+	}
 
 	keyboard := telegoutil.Keyboard(
 		telegoutil.KeyboardRow(
@@ -155,7 +252,7 @@ func callLearn(bot *telego.Bot, update telego.Update) {
 
 	message := telegoutil.Message(
 		telegoutil.ID(chatID),
-		fmt.Sprintf("%v", toShow.Translation),
+		fmt.Sprintf("%v", (*toShow).Translation),
 	).WithReplyMarkup(keyboard)
 	bot.SendMessage(message)
 }
@@ -179,27 +276,27 @@ func handleUpdate(bot *telego.Bot, update telego.Update) {
 		chatStateMutex.Lock()
 		currState := chatStates[chatID]
 		delete(chatStates, chatID)
-		chatStateMutex.Unlock()
 		// call db next level for currState
-		fmt.Println(currState.word)
+		setWord(currState.word, false, chatID)
+		chatStateMutex.Unlock()
 		callRevise(bot, update)
 		return
 	} else if userMessage == "уже знал" || userMessage == "уже знала" || userMessage == "уже знал(а)" {
 		chatStateMutex.Lock()
 		currState := chatStates[chatID]
 		delete(chatStates, chatID)
-		chatStateMutex.Unlock()
 		// call db max level for currState
-		fmt.Println(currState.word)
+		setWord(currState.word, true, chatID)
+		chatStateMutex.Unlock()
 		callLearn(bot, update)
 		return
 	} else if userMessage == "начать учить" {
 		chatStateMutex.Lock()
 		currState := chatStates[chatID]
 		delete(chatStates, chatID)
-		chatStateMutex.Unlock()
 		// call db start revising new word
-		fmt.Println(currState.word)
+		setWord(currState.word, false, chatID)
+		chatStateMutex.Unlock()
 		callLearn(bot, update)
 		return
 	} else if userMessage == "повторить ещё раз" || userMessage == "повторить еще раз" {
@@ -216,7 +313,6 @@ func handleUpdate(bot *telego.Bot, update telego.Update) {
 	}
 	var message *telego.SendMessageParams
 
-	fmt.Println(userMessage)
 	if userMessage != state.word.Word && state.tries < 2 {
 		state.tries++
 		chatStateMutex.Lock()
@@ -226,8 +322,7 @@ func handleUpdate(bot *telego.Bot, update telego.Update) {
 		// wrong tries: x/3
 		message = telegoutil.Message(
 			telegoutil.ID(chatID),
-
-			fmt.Sprintf("%v\nНеправильно, попыток: %v/3", state.word.Word, state.tries),
+			fmt.Sprintf("%v\nНеправильно, попыток: %v/3", state.word.Translation, state.tries),
 		)
 
 	} else {
@@ -257,25 +352,26 @@ func handleUpdate(bot *telego.Bot, update telego.Update) {
 }
 
 func main() {
-	const debug bool = true
+	const debug bool = false
 	if debug {
+		log.Println("Test up and running")
 		test()
 		os.Exit(0)
 	}
 	err := godotenv.Load()
 
 	if err != nil {
-		fmt.Println("Error loading .env file")
-		os.Exit(1)
+		log.Fatalln("Error loading .env file")
 	}
 
 	botToken := os.Getenv("TELEGRAM_API_TOKEN")
 
+	openDataBase()
+
 	bot, err := telego.NewBot(botToken, telego.WithWarnings())
 
 	if err != nil {
-		fmt.Println("No telegram token")
-		os.Exit(1)
+		log.Fatalln("No telegram token")
 	}
 
 	updates, _ := bot.UpdatesViaLongPolling(nil)
@@ -285,13 +381,14 @@ func main() {
 	defer botHandler.Stop()
 
 	botHandler.Handle(callMenu, telegohandler.CommandEqual("start"))
+	botHandler.Handle(callMenu, telegohandler.CommandEqual("menu"))
 	botHandler.Handle(callRevise, telegohandler.CallbackDataEqual("revise"))
 	botHandler.Handle(callLearn, telegohandler.CallbackDataEqual("learn"))
 	botHandler.Handle(callRevise, telegohandler.CommandEqual("revise"))
 	botHandler.Handle(callLearn, telegohandler.CommandEqual("learn"))
 	botHandler.Handle(handleUpdate, telegohandler.AnyMessageWithText())
 
-	println("Up and running")
+	log.Println("Up and running")
 	botHandler.Start()
 
 	return

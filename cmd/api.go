@@ -36,7 +36,7 @@ func initDatabase() error {
 		translation TEXT NOT NULL,
 		custom BOOLEAN
 	);
-	CREATE TABLE IF NOT EXISTS userwords(  
+	CREATE TABLE IF NOT EXISTS userwords(
 		id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER,
 		word_id INTEGER,
