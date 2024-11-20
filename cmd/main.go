@@ -358,6 +358,7 @@ func main() {
 		test()
 		os.Exit(0)
 	}
+
 	err := godotenv.Load()
 
 	if err != nil {
@@ -366,15 +367,24 @@ func main() {
 
 	botToken := os.Getenv("TELEGRAM_API_TOKEN")
 
-	_, err = os.Stat("data/database.db")
+	isDocker := os.Getenv("DOCKER")
+
+	var datadir string
+	if isDocker == "true" {
+		datadir = "/data"
+	} else {
+		datadir = "./data"
+	}
+
+	_, err = os.Stat(datadir + "/database.db")
 	if err != nil {
 		log.Printf("Creating database\n")
-		err = initDatabase()
+		err = initDatabase(datadir)
 		if err != nil {
 			log.Fatalf("Error when Initing database:\n%v\n", err.Error())
 		}
 	}
-	openDataBase()
+	openDataBase(datadir)
 
 	bot, err := telego.NewBot(botToken, telego.WithWarnings())
 

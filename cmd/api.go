@@ -21,9 +21,9 @@ type Word struct {
 var db *sql.DB
 
 // Initialize the database and populate it with words from CSV files
-func initDatabase() error {
+func initDatabase(datadir string) error {
 	var err error
-	db, err = sql.Open("sqlite3", "./data/database.db")
+	db, err = sql.Open("sqlite3", datadir+"/database.db")
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -52,21 +52,21 @@ func initDatabase() error {
 		return err
 	}
 
-	err = loadWordsFromCSV("data/words1.csv")
+	err = loadWordsFromCSV(datadir + "/words1.csv")
 	if err != nil {
 		return err
 	}
-	err = loadWordsFromCSV("data/words2.csv")
+	err = loadWordsFromCSV(datadir + "data/words2.csv")
 	if err != nil {
 		return err
 	}
-	err = loadWordsFromCSV("data/words3.csv")
+	err = loadWordsFromCSV(datadir + "data/words3.csv")
 	return err
 }
 
-func openDataBase() {
+func openDataBase(datadir string) {
 	var err error
-	db, err = sql.Open("sqlite3", "./data/database.db")
+	db, err = sql.Open("sqlite3", datadir+"/database.db")
 	if err != nil {
 		log.Fatalf("Error when opening db:\n%v\n", err.Error())
 	}
@@ -160,7 +160,7 @@ func setWord(word Word, isLearned bool, chatID int64) error {
 }
 
 func test() {
-	err := initDatabase()
+	err := initDatabase("./data")
 	if err != nil {
 		log.Fatalln("error Initing db")
 	}
