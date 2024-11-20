@@ -366,6 +366,14 @@ func main() {
 
 	botToken := os.Getenv("TELEGRAM_API_TOKEN")
 
+	_, err = os.Stat("data/database.db")
+	if err != nil {
+		log.Printf("Creating database\n")
+		err = initDatabase()
+		if err != nil {
+			log.Fatalf("Error when Initing database:\n%v\n", err.Error())
+		}
+	}
 	openDataBase()
 
 	bot, err := telego.NewBot(botToken, telego.WithWarnings())
