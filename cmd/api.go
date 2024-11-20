@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -40,7 +41,8 @@ func initDatabase() {
 		word_id INTEGER,
 		next_revise TIMESTAMP,
 		level INTEGER,
-		custom BOOLEAN
+		custom BOOLEAN,
+		UNIQUE(user_id, word_id) -- Уникальное ограничение на сочетание user_id и word_id
 	);
 	`
 	_, err = db.Exec(sqlStmt)
@@ -103,8 +105,8 @@ func getReviseWord(chatID int64) (*Word, error) {
 	var word Word
 	row := db.QueryRow(`
 		SELECT w.id, w.word, w.translation, w.custom 
-		FROM words w
-		JOIN userwords uw ON w.id = uw.word_id
+		FROM words w INNER JOIN userwords uw 
+		ON uw.word_id = w.id
 		WHERE uw.user_id = ? AND uw.next_revise <= ?
 		ORDER BY RANDOM() LIMIT 1`, chatID, time.Now())
 
@@ -117,7 +119,8 @@ func getReviseWord(chatID int64) (*Word, error) {
 	return &word, nil
 }
 
-// Set a word for the user to the next level or mark it as learned
+// Sets word for this user to the next level or revision if isLearned is false
+// Sets word for this user to be learned (max level of revision) isLearned is true
 func setWord(word Word, isLearned bool, chatID int64) error {
 	now := time.Now()
 	if isLearned {
@@ -129,12 +132,51 @@ func setWord(word Word, isLearned bool, chatID int64) error {
 	} else {
 		nextRevise := now.Add(24 * time.Hour)
 		_, err := db.Exec(`
-			INSERT OR REPLACE INTO userwords (user_id, word_id, next_revise, level, custom) 
-			VALUES (?, ?, ?, 0, ?)`, chatID, word.ID, nextRevise, word.Custom)
+			INSERT INTO userwords (user_id, word_id, next_revise, level, custom) 
+			VALUES (?, ?, ?, 0, ?) 
+			ON CONFLICT (user_id, word_id) 
+			DO UPDATE SET next_revise = ?, level = 0`,
+			chatID, word.ID, nextRevise, word.Custom, nextRevise)
 		return err
 	}
 }
 
 func test() {
 	initDatabase()
+
+	chatID := int64(1)
+
+	word, err := getLearnWord(chatID)
+	if err != nil {
+		log.Fatalf("Ошибка при получении слова для изучения: %v", err)
+	} else if word == nil {
+		fmt.Println("Нет доступных слов для изучения.")
+	} else {
+		fmt.Printf("Слово для изучения: %s - Перевод: %s\n", word.Word, word.Translation)
+		err := setWord(*word, false, chatID)
+		if err != nil {
+			log.Fatalf("Ошибка при обновлении статуса слова: %v", err)
+		}
+	}
+
+	reviseWord, err := getReviseWord(chatID)
+	if err != nil {
+		log.Fatalf("Ошибка при получении слова для повторения: %v", err)
+	} else if reviseWord == nil {
+		fmt.Println("Нет доступных слов для повторения.")
+	} else {
+		fmt.Printf("Слово для повторения: %s - Перевод: %s\n", reviseWord.Word, reviseWord.Translation)
+		err := setWord(*reviseWord, true, chatID)
+		if err != nil {
+			log.Fatalf("Ошибка при обновлении статуса слова: %v", err)
+		}
+	}
+
+	if word, err := getLearnWord(chatID); err == nil && word != nil {
+		fmt.Printf("Новое слово для изучения: %s - Перевод: %s\n", word.Word, word.Translation)
+	}
+
+	if reviseWord, err := getReviseWord(chatID); err == nil && reviseWord != nil {
+		fmt.Printf("Новое слово для повторения: %s - Перевод: %s\n", reviseWord.Word, reviseWord.Translation)
+	}
 }
