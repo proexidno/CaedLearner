@@ -257,7 +257,7 @@ func handleUpdate(bot *telego.Bot, update telego.Update) {
 }
 
 func main() {
-	const debug bool = false
+	const debug bool = true
 	if debug {
 		test()
 		os.Exit(0)
