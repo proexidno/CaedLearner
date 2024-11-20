@@ -21,11 +21,12 @@ type Word struct {
 var db *sql.DB
 
 // Initialize the database and populate it with words from CSV files
-func initDatabase() {
+func initDatabase() error {
 	var err error
 	db, err = sql.Open("sqlite3", "./data/database.db")
 	if err != nil {
-		panic(err)
+		println(err.Error())
+		return err
 	}
 
 	sqlStmt := `
@@ -47,28 +48,36 @@ func initDatabase() {
 	`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
-		panic(err)
+		println(err.Error())
+		return err
 	}
 
-	loadWordsFromCSV("data/words1.csv")
-	loadWordsFromCSV("data/words2.csv")
-	loadWordsFromCSV("data/words3.csv")
+	err = loadWordsFromCSV("data/words1.csv")
+	if err != nil {
+		return err
+	}
+	err = loadWordsFromCSV("data/words2.csv")
+	if err != nil {
+		return err
+	}
+	err = loadWordsFromCSV("data/words3.csv")
+	return err
 }
 
 // Load words from a CSV file into the database
-func loadWordsFromCSV(filename string) {
+func loadWordsFromCSV(filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Println("Error opening CSV file:", err)
-		return
+		log.Printf("Error opening CSV file: %v\n", err.Error())
+		return err
 	}
 	defer file.Close()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
-		log.Println("Error reading CSV file:", err)
-		return
+		log.Printf("Error reading CSV file: %v\n", err.Error())
+		return err
 	}
 
 	for _, record := range records {
@@ -77,9 +86,10 @@ func loadWordsFromCSV(filename string) {
 		}
 		_, err := db.Exec("INSERT OR IGNORE INTO words (word, translation, custom) VALUES (?, ?, ?)", record[0], record[1], false)
 		if err != nil {
-			log.Println("Error inserting word into DB:", err)
+			log.Printf("Error inserting word into DB: %v\n", err.Error())
 		}
 	}
+	return nil
 }
 
 // Get a random word that the user has never seen
@@ -142,7 +152,11 @@ func setWord(word Word, isLearned bool, chatID int64) error {
 }
 
 func test() {
-	initDatabase()
+	println("start")
+	err := initDatabase()
+	if err != nil {
+		log.Fatalln("error Initing db")
+	}
 
 	chatID := int64(1)
 
