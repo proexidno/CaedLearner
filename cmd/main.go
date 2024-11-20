@@ -151,6 +151,7 @@ func callRevise(bot *telego.Bot, update telego.Update) {
 					fmt.Sprintf("Нет доступных слов для повторения. Вот новое слово:\n%v", (*toShow).Translation),
 				).WithReplyMarkup(keyboard)
 				bot.SendMessage(message)
+				return
 			}
 		} else {
 			toShow = &state.word
