@@ -360,15 +360,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	isDocker := os.Getenv("DOCKER")
+
 	err := godotenv.Load()
 
-	if err != nil {
+	if err != nil && isDocker != "true" {
 		log.Fatalln("Error loading .env file")
 	}
 
 	botToken := os.Getenv("TELEGRAM_API_TOKEN")
-
-	isDocker := os.Getenv("DOCKER")
 
 	var datadir string
 	if isDocker == "true" {
